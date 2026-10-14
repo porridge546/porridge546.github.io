@@ -13,6 +13,7 @@ const THREE_URLS = [
   'https://unpkg.com/three@0.180.0/build/three.module.js',
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.180.0/three.module.min.js',
 ];
+const CDN_NAMES = ['jsdelivr', 'fastly.jsdelivr', 'unpkg', 'cdnjs'];
 
 function showLoadError(err) {
   const box = document.getElementById('loadError');
@@ -22,28 +23,39 @@ function showLoadError(err) {
   }
 }
 
-let THREE = null;
-let lastErr = null;
-for (const url of THREE_URLS) {
-  try {
-    const mod = await import(url);
-    if (mod && mod.WebGLRenderer && mod.SphereGeometry) { THREE = mod; break; }
-    lastErr = new Error('CDN 返回内容异常: ' + url);
-  } catch (e) {
-    lastErr = e;
+function setLoading(text) {
+  const el = document.getElementById('loadingText');
+  if (el) el.textContent = text;
+}
+
+// 包一层 async 函数、避免顶层 await，兼容较旧的浏览器内核
+main();
+async function main() {
+  let THREE = null;
+  let lastErr = null;
+  for (let i = 0; i < THREE_URLS.length; i++) {
+    setLoading(`正在加载 3D 引擎…（${i + 1}/${THREE_URLS.length}：${CDN_NAMES[i]}）`);
+    try {
+      const mod = await import(THREE_URLS[i]);
+      if (mod && mod.WebGLRenderer && mod.SphereGeometry) { THREE = mod; break; }
+      lastErr = new Error('CDN 返回内容异常: ' + THREE_URLS[i]);
+    } catch (e) {
+      lastErr = e;
+    }
   }
+
+  if (!THREE) {
+    showLoadError(lastErr);
+    throw lastErr;
+  }
+
+  window.__THREE = THREE;
+  window.__TBC = makeTrackballControls(THREE);
+
+  setLoading('正在构建分子模型…');
+  // 主程序（从 window 读取 THREE / TrackballControls）
+  await import('./main.js?v=20261014e');
 }
-
-if (!THREE) {
-  showLoadError(lastErr);
-  throw lastErr;
-}
-
-window.__THREE = THREE;
-window.__TBC = makeTrackballControls(THREE);
-
-// 主程序（从 window 读取 THREE / TrackballControls）
-await import('./main.js?v=20261014b');
 
 // ---------- TrackballControls（three r180，内联并改写为工厂函数） ----------
 function makeTrackballControls(THREE) {

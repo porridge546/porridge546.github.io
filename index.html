@@ -4,13 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>紫杉醇 3D 分子模型 · 交互查看器</title>
-  <link rel="stylesheet" href="./style.css?v=20261007e" />
+  <link rel="stylesheet" href="./style.css?v=20261014e" />
 </head>
 <body>
   <div id="app">
     <canvas id="scene"></canvas>
 
-    <!-- 加载失败提示：仅当所有 CDN 都不可达时显示 -->
+    <!-- 加载中提示：显示 3D 引擎加载进度，构建完成后自动消失 -->
+    <div id="loading" style="position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(15,17,21,0.55);color:#e8eaf0;font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;">
+      <div style="text-align:center;">
+        <div style="width:36px;height:36px;margin:0 auto 14px;border:3px solid rgba(255,255,255,0.2);border-top-color:#4f8cff;border-radius:50%;animation:__spin 0.9s linear infinite;"></div>
+        <div id="loadingText" style="font-size:13px;color:#9aa1b2;">正在加载 3D 引擎…</div>
+      </div>
+    </div>
+    <style>@keyframes __spin{to{transform:rotate(360deg)}}</style>
+
+    <!-- 加载失败提示：仅当所有 CDN 都不可达或浏览器内核过旧时显示 -->
     <div id="loadError" style="display:none;position:absolute;inset:0;z-index:50;align-items:center;justify-content:center;background:rgba(15,17,21,0.92);color:#e8eaf0;font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;">
       <div style="max-width:420px;text-align:center;padding:32px;border:1px solid rgba(255,255,255,0.15);border-radius:14px;">
         <h2 style="font-size:17px;margin-bottom:12px;">3D 引擎加载失败</h2>
@@ -73,16 +82,39 @@
       </div>
       <button id="resetAll" class="btn ghost" style="margin-top:12px">全部恢复默认颜色</button>
 
-      <div class="slider-row" id="angleRow" style="display:none; margin-top:12px">
-        <label>键角弯折 <span class="val" id="vAngle">0°</span></label>
+      <div class="slider-row disabled" id="angleRow" style="margin-top:12px">
+        <label>键角弯折 <span class="val" id="vAngle">选中一根棍子后可调</span></label>
         <input type="range" id="sAngle" min="-60" max="60" step="1" value="0" />
       </div>
-      <p class="hint">选中一根棍子后，可用「键角弯折」滑块调整该原子-原子键角；<br />选中后此滑块自动出现</p>
+      <p class="hint">点击选中一根棍子（出现白色线框）后，用「键角弯折」调整该键键角；<br />空间填充模式下没有棍子可选</p>
+
+      <h2 style="margin-top:14px">视角书签 <span class="val" id="bmCount">0/6</span></h2>
+      <div id="bmGrid"></div>
+      <button id="bmSave" class="btn ghost">记录当前视角与参数</button>
+      <p class="hint">记录后点击小图跳回当时的视角与全部参数；点小图上的 × 单独删除<br />书签保存在页面内存中，刷新后清空</p>
+
       <p class="hint">左键拖动旋转 · 滚轮缩放 · 右键平移<br />点击物体加入/移出选择 · 点击空白处清空选择</p>
     </aside>
 
     <footer class="panel bottom" id="stats"></footer>
   </div>
-  <script type="module" src="./loader.js?v=20261014b"></script>
+
+  <!-- 看门狗：15 秒后模型仍未加载成功，提示浏览器内核过旧（经典脚本，所有内核都能运行） -->
+  <script>
+  (function () {
+    window.__viewerLoaded = false;
+    setTimeout(function () {
+      if (!window.__viewerLoaded) {
+        var box = document.getElementById('loadError');
+        var p = box && box.querySelector('p');
+        if (p) p.innerHTML = '加载超时。可能是当前内置浏览器内核过旧，或网络无法访问公共 CDN。<br/>请点击右上角「···」，选择「在浏览器中打开」（Chrome / Edge / Safari）。';
+        if (box) box.style.display = 'flex';
+        var l = document.getElementById('loading');
+        if (l) l.remove();
+      }
+    }, 15000);
+  })();
+  </script>
+  <script type="module" src="./loader.js?v=20261014e"></script>
 </body>
 </html>

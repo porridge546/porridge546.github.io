@@ -10,6 +10,8 @@ const BALL_R = { H: 0.27, C: 0.64, N: 0.59, O: 0.55 };
 // 球棍模式原子球基准半径（Å）：按共价半径比例 H:C:N:O ≈ 31:76:71:66，
 // 碳最大、氢最小，不同元素有明显大小差异
 const STICK_R = 0.16;                // 棍子基准半径（Å）
+// 棍子颜色覆盖表：'b<idx>' -> 颜色值；重建棍子后仍保留用户改色
+const bondColorOverrides = new Map();
 
 // ---------- state ----------
 const state = {
@@ -114,8 +116,10 @@ function rebuildBonds(curPos) {
     const start = new THREE.Vector3().copy(p1).addScaledVector(dir, trimA);
 
     const r = STICK_R * state.stickScale * (bd.o >= 2 ? 1.25 : 1);
+    const bondKey = 'b' + k;
     const mat = new THREE.MeshPhongMaterial({
-      color: BOND_BASE, shininess: 40, specular: 0x222222,
+      color: bondColorOverrides.has(bondKey) ? bondColorOverrides.get(bondKey) : BOND_BASE,
+      shininess: 40, specular: 0x222222,
     });
     const cyl = new THREE.Mesh(cylGeo, mat);
     cyl.scale.set(r, segLen, r);
@@ -241,14 +245,18 @@ function refreshHighlight() {
 
 // ---------- UI：模式切换 ----------
 const tabs = document.querySelectorAll('.tab');
-tabs.forEach(t => t.addEventListener('click', () => {
-  tabs.forEach(x => x.classList.toggle('active', x === t));
-  state.style = t.dataset.style;
+function syncStyleUI() {
+  tabs.forEach(x => x.classList.toggle('active', x.dataset.style === state.style));
   // 滑块可用性
   document.getElementById('rowSphere').classList.toggle('disabled', state.style === 'sticks');
   document.getElementById('rowStick').classList.toggle('disabled', state.style === 'spacefill');
   document.getElementById('rowGap').classList.toggle('disabled', state.style !== 'ballstick');
   document.getElementById('rowGapH').classList.toggle('disabled', state.style !== 'ballstick');
+  refreshStats();
+}
+tabs.forEach(t => t.addEventListener('click', () => {
+  state.style = t.dataset.style;
+  syncStyleUI();
   rebuild();
 }));
 
@@ -294,6 +302,7 @@ document.getElementById('resetView').addEventListener('click', () => {
   set('sSphere', 1); set('sStick', 1);
   set('sGap', 0.15); set('sGapH', 0);
   set('sRotY', 170); set('sRotX', 10);
+  bondColorOverrides.clear();
   refreshLegendStyles();
   for (const m of atomMeshes) m.material.color.set(m.userData.base);
   for (const c of bondGroup.children) {
@@ -338,7 +347,6 @@ function refreshStats() {
   document.getElementById('stats').textContent =
     `共 ${data.atoms.length} 个原子 · ${data.bonds.length} 根键 · ${STYLE_DESC[state.style]}`;
 }
-tabs.forEach(t => t.addEventListener('click', refreshStats));
 refreshStats();
 
 // ---------- 选择与批量改色 ----------
@@ -374,15 +382,21 @@ function refreshSelInfo() {
   if (nb) parts.push(`${nb} 根键`);
   selInfo.innerHTML = `已选中 <b>${n}</b> 项（${parts.join(' + ')}）`;
   pickerRow.style.display = 'flex';
-  // 只选中一根键时，显示键角调节
+  updateAngleRow();
+}
+
+// 键角滑块常驻显示：选中单根棍子时可用，否则禁用并提示
+function updateAngleRow() {
   const bondKeys = [...state.selection].filter(k => k[0] === 'b');
-  if (bondKeys.length === 1 && na === 0) {
-    angleRow.style.display = 'block';
+  if (bondKeys.length === 1) {
+    angleRow.classList.remove('disabled');
     const deg = (state.bend.get(bondKeys[0]) || 0) * 180 / Math.PI;
     sAngle.value = deg.toFixed(0);
     vAngle.textContent = deg.toFixed(0) + '°';
   } else {
-    angleRow.style.display = 'none';
+    angleRow.classList.add('disabled');
+    sAngle.value = 0;
+    vAngle.textContent = '选中一根棍子后可调';
   }
 }
 
@@ -400,12 +414,19 @@ sAngle.addEventListener('input', () => {
 });
 
 colorPicker.addEventListener('input', e => {
-  for (const m of selectedMeshes()) m.material.color.set(e.target.value);
+  for (const m of selectedMeshes()) {
+    m.material.color.set(e.target.value);
+    if (m.userData.kind === 'bond') bondColorOverrides.set(m.userData.key, e.target.value);
+  }
 });
 document.getElementById('resetSel').addEventListener('click', () => {
-  for (const m of selectedMeshes()) m.material.color.set(m.userData.base);
+  for (const m of selectedMeshes()) {
+    m.material.color.set(m.userData.base);
+    if (m.userData.kind === 'bond') bondColorOverrides.delete(m.userData.key);
+  }
 });
 document.getElementById('resetAll').addEventListener('click', () => {
+  bondColorOverrides.clear();
   for (const m of atomMeshes) m.material.color.set(m.userData.base);
   for (const c of bondGroup.children) {
     if (!c.userData.isProxy) c.material.color.set(BOND_BASE);
@@ -454,6 +475,94 @@ canvas.addEventListener('pointermove', e => {
   canvas.style.cursor = ray.intersectObjects(pickables(), false).length ? 'pointer' : 'grab';
 });
 
+// ---------- 视角书签（6 个槽位：记录当前视角截图 + 全部参数，点击小图恢复） ----------
+const bmGrid = document.getElementById('bmGrid');
+const bmCount = document.getElementById('bmCount');
+const bookmarks = new Array(6).fill(null);
+
+function refreshBmUI() {
+  bmGrid.innerHTML = '';
+  let n = 0;
+  bookmarks.forEach((b, i) => {
+    const slot = document.createElement('div');
+    if (b) {
+      n++;
+      slot.className = 'bm-slot filled';
+      const img = document.createElement('img');
+      img.src = b.thumb;
+      img.alt = '书签 ' + (i + 1);
+      img.title = '点击恢复该视角与全部参数';
+      img.addEventListener('click', () => applyBookmark(b));
+      const del = document.createElement('button');
+      del.className = 'bm-del';
+      del.textContent = '×';
+      del.title = '删除该书签';
+      del.addEventListener('click', () => { bookmarks[i] = null; refreshBmUI(); });
+      slot.append(img, del);
+    } else {
+      slot.className = 'bm-slot';
+      slot.textContent = '空';
+    }
+    bmGrid.appendChild(slot);
+  });
+  bmCount.textContent = n + '/6';
+}
+
+function captureBookmark() {
+  // 同步渲染一帧后再截图，避免 WebGL 缓冲被清空
+  renderer.render(scene, camera);
+  return {
+    thumb: renderer.domElement.toDataURL('image/png'),
+    style: state.style,
+    sphereScale: state.sphereScale, stickScale: state.stickScale,
+    gap: state.gap, gapH: state.gapH,
+    rotY: THREE.MathUtils.radToDeg(modelGroup.rotation.y),
+    rotX: THREE.MathUtils.radToDeg(modelGroup.rotation.x),
+    bend: [...state.bend.entries()],
+    hidden: [...state.hiddenEls],
+    camPos: camera.position.toArray(),
+    camUp: camera.up.toArray(),
+    target: controls.target.toArray(),
+    atomColors: atomMeshes.map(m => m.material.color.getHex()),
+    bondKeys: bondGroup.children.filter(c => !c.userData.isProxy).map(c => c.userData.key),
+    bondColors: bondGroup.children.filter(c => !c.userData.isProxy).map(c => c.material.color.getHex()),
+  };
+}
+
+function applyBookmark(b) {
+  state.style = b.style;
+  state.bend = new Map(b.bend);
+  state.hiddenEls = new Set(b.hidden);
+  state.selection.clear();
+  bondColorOverrides.clear();
+  b.bondKeys.forEach((k, idx) => bondColorOverrides.set(k, b.bondColors[idx]));
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    el.value = v;
+    el.dispatchEvent(new Event('input'));
+  };
+  set('sSphere', b.sphereScale); set('sStick', b.stickScale);
+  set('sGap', b.gap); set('sGapH', b.gapH);
+  set('sRotY', ((Math.round(b.rotY) % 360) + 360) % 360);
+  set('sRotX', Math.max(-90, Math.min(90, Math.round(b.rotX))));
+  refreshLegendStyles();
+  atomMeshes.forEach((m, i) => m.material.color.setHex(b.atomColors[i]));
+  camera.position.fromArray(b.camPos);
+  camera.up.fromArray(b.camUp);
+  controls.target.fromArray(b.target);
+  syncStyleUI();
+  rebuild();
+  updateAngleRow();
+}
+
+document.getElementById('bmSave').addEventListener('click', () => {
+  const i = bookmarks.indexOf(null);
+  if (i === -1) { alert('书签已满（6 个），请先删除不需要的记录'); return; }
+  bookmarks[i] = captureBookmark();
+  refreshBmUI();
+});
+refreshBmUI();
+
 // ---------- resize / loop ----------
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -465,7 +574,11 @@ window.addEventListener('resize', resize);
 resize();
 rebuild();
 
+// 标记加载成功，并在首帧渲染后移除加载提示（看门狗脚本据此判断内核是否过旧）
+window.__viewerLoaded = true;
+const __loadingEl = document.getElementById('loading');
 renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
+  if (__loadingEl && __loadingEl.parentNode) __loadingEl.remove();
 });
