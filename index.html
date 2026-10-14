@@ -5,18 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>紫杉醇 3D 分子模型 · 交互查看器</title>
   <link rel="stylesheet" href="./style.css?v=20261007e" />
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-    }
-  }
-  </script>
 </head>
 <body>
   <div id="app">
     <canvas id="scene"></canvas>
+
+    <!-- 加载失败提示：仅当所有 CDN 都不可达时显示 -->
+    <div id="loadError" style="display:none;position:absolute;inset:0;z-index:50;align-items:center;justify-content:center;background:rgba(15,17,21,0.92);color:#e8eaf0;font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;">
+      <div style="max-width:420px;text-align:center;padding:32px;border:1px solid rgba(255,255,255,0.15);border-radius:14px;">
+        <h2 style="font-size:17px;margin-bottom:12px;">3D 引擎加载失败</h2>
+        <p style="font-size:13px;color:#9aa1b2;line-height:1.8;">当前网络无法访问 three.js 的公共 CDN。<br/>请切换网络（如 Wi-Fi ↔ 蜂窝数据）后刷新重试；<br/>或改用系统浏览器（Chrome / Edge / Safari）打开本链接。</p>
+        <button onclick="location.reload()" style="margin-top:16px;padding:8px 24px;border:none;border-radius:8px;background:#4f8cff;color:#fff;font-size:13px;cursor:pointer;">重新加载</button>
+      </div>
+    </div>
 
     <header class="panel top">
       <h1>紫杉醇 · 3D 分子模型交互器</h1>
@@ -82,6 +83,6 @@
 
     <footer class="panel bottom" id="stats"></footer>
   </div>
-  <script type="module" src="./main.js?v=20261007e"></script>
+  <script type="module" src="./loader.js?v=20261014b"></script>
 </body>
 </html>

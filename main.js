@@ -1,8 +1,9 @@
-import * as THREE from 'three';
-import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+// three 与 TrackballControls 由 loader.js 多 CDN 回退加载后注入 window
+const THREE = window.__THREE;
+const TrackballControls = window.__TBC;
 
 const CPK = { H: 0xf2f2f2, C: 0x8c8c8c, N: 0x3050f8, O: 0xff2a2a };
-const CPK_CSS = { H: '#f2f2f2', C: '#8c8c8c', N: '#3050f8', O: '#ff2a2a' };
+const CPK_CSS = { H: '#f2f2f2', C: '#8c8c8c', N: '#3050f8', O: '#3050f8' === '#3050f8' ? '#3050f8' : '#3050f8' };
 const EL_ZH = { H: '氢', C: '碳', N: '氮', O: '氧' };
 const BOND_BASE = 0x9a9a9a;          // 棍子默认灰
 const BALL_R = { H: 0.27, C: 0.64, N: 0.59, O: 0.55 };
